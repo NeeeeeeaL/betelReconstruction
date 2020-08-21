@@ -19,14 +19,14 @@ cv::Point2f blockExtraction( cv::Mat& imgSrc)
 	cv::Sobel(imgSrc, imgThreshold, imgSrc.depth(), 2, 0, 11);
 
 	//腐蚀
-	cv::Mat structElement1 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(6, 4), cv::Point(-1, -1));
+	cv::Mat structElement1 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(6, 2), cv::Point(-1, -1));
 	cv::erode(imgThreshold, imgThreshold, structElement1);
 
 	//中值滤波
-	cv::medianBlur(imgThreshold, imgThreshold, 5);
+	cv::medianBlur(imgThreshold, imgThreshold, 7);
 
 	//膨胀
-	cv::Mat structElement2 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(10, 70), cv::Point(-1, -1));
+	cv::Mat structElement2 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(10, 90), cv::Point(-1, -1));
 	cv::dilate(imgThreshold, imgThreshold, structElement2);
 
 	//腐蚀
@@ -42,6 +42,7 @@ cv::Point2f blockExtraction( cv::Mat& imgSrc)
 	cv::Point2f lkCenter;
 	cv::Point2f lkCenter1;
 	cv::Point2f lkCenter2;
+	cv::Point2f lkCenterup;
 
 	vector<cv::Point2f> lkPoint; //量块4个外角点
 
@@ -55,7 +56,7 @@ cv::Point2f blockExtraction( cv::Mat& imgSrc)
 	for (int i = 0; i < contours.size(); i++)
 	{
 		double Area = fabs(contourArea(contours[i], true));
-		if (Area > 10000)
+		if (Area > 2000)
 		{
 			cout << "Area" << i << " = " << Area << endl;
 
@@ -110,6 +111,11 @@ cv::Point2f blockExtraction( cv::Mat& imgSrc)
 		lkCenter1.y = lkPoint[6].y + (lkPoint[0].y - lkPoint[6].y) / 2.0;
 		cv::circle(imgSrc, lkCenter1, 200, cv::Scalar(255, 0, 0), 4);
 
+		lkCenterup.x = lkCenter1.x;
+		lkCenterup.y = lkCenter1.y + 500;
+
+		cv::circle(imgSrc, lkCenterup, 200, cv::Scalar(255, 0, 0), 4);
+
 		lkCenter2.x = lkPoint[5].x + (lkPoint[3].x - lkPoint[5].x) / 2.0;
 		lkCenter2.y = lkPoint[3].y + (lkPoint[5].y - lkPoint[3].y) / 2.0;
 		cv::circle(imgSrc, lkCenter2, 200, cv::Scalar(255, 0, 255), 4);
@@ -124,9 +130,77 @@ cv::Point2f blockExtraction( cv::Mat& imgSrc)
 
 
 //提取槟榔中心区域
-void betelExtraction(cv::Mat & imgSrc)
+void betelExtraction(cv::Mat& imgSrc)
 {
+	cv::equalizeHist(imgSrc, imgSrc);
+
+	cv::Mat imgThreshold;
+	cv::threshold(imgSrc, imgThreshold, 14, 255, CV_THRESH_BINARY);
+
+	//中值滤波
+	cv::medianBlur(imgThreshold, imgThreshold, 19);
+
+	//cv::Mat imgSobel;
+	//cv::Sobel(imgThreshold, imgSobel, imgSrc.depth(), 1, 0, 15);
+
+	////腐蚀
+	//cv::Mat structElement1 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(4, 4), cv::Point(-1, -1));
+	//cv::erode(imgSobel, imgSobel, structElement1);
 
 
-	//cv::waitKey(0);
+	////中值滤波
+	//cv::medianBlur(imgSobel, imgSobel, 9);
+
+	////膨胀
+	//cv::Mat structElement2 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(25, 80), cv::Point(-1, -1));
+	//cv::dilate(imgSobel, imgSobel, structElement2);
+
+	////膨胀
+	//cv::Mat structElement3 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(60, 80), cv::Point(-1, -1));
+	//cv::dilate(imgSobel, imgSobel, structElement3);
+
+	//无条纹时的膨胀
+	cv::Mat structElement2 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(20, 60), cv::Point(-1, -1));
+	cv::erode(imgThreshold, imgThreshold, structElement2);
+
+	//寻找连通域
+	vector<vector<cv::Point>> contours;
+	vector<cv::Vec4i> hierarchy;
+
+	cv::Point2f rect[4];//最小外接矩形四个角点
+
+	cv::Point2f lkCenter;
+
+	cv::findContours(imgThreshold, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE);
+
+	cv::Mat dstImg = imgSrc.clone();
+	cv::cvtColor(dstImg, dstImg, cv::COLOR_GRAY2BGR);
+
+	vector<cv::RotatedRect> boundRect(contours.size());//定义外接矩形集合
+
+	for (int i = 0; i < contours.size(); i++)
+	{
+		double Area = fabs(contourArea(contours[i], true));
+		if (Area > 150000 && Area < 800000)
+		{
+			cout << "Area" << i << " = " << Area << endl;
+
+			boundRect[i] = cv::minAreaRect(cv::Mat(contours[i]));
+			boundRect[i].points(rect);
+
+			cv::circle(dstImg, boundRect[i].center, 40, cv::Scalar(255, 0, 255), 6, 8);
+
+			cv::drawContours(dstImg, contours, i, cv::Scalar(255, 255, 0), 6, 8, hierarchy);
+
+			//画矩形
+			//cv::rectangle(imgThreshold, boundRect[i], cv::Scalar(0, 255, 0));
+			for (int j = 0; j < 4; j++)
+			{
+				cv::line(dstImg, rect[j], rect[(j + 1) % 4], cv::Scalar(0, 255, 0), 6, 8);  //绘制最小外接矩形每条边
+			}
+		}
+	}
+
+	cv::waitKey(0);
+
 }
